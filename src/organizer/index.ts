@@ -61,12 +61,9 @@ interface Report {
   dryRun?: ReturnType<DryRunLog['getEntries']>
 }
 
-const GOOGLE_WORKSPACE_MIMES = new Set([
-  'application/vnd.google-apps.document',
-  'application/vnd.google-apps.spreadsheet',
-  'application/vnd.google-apps.presentation',
-  'application/vnd.google-apps.form',
-])
+// ALL native Google Workspace types are skipped — folders, shortcuts, forms, etc.
+// can't be moved or meaningfully analyzed. We only process real files.
+const GOOGLE_WORKSPACE_PREFIX = 'application/vnd.google-apps.'
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -109,7 +106,7 @@ async function analyzeFile(
   const strategy = resolveStrategy(mime, size)
 
   // Skip native Google Workspace files — can't move them
-  if (GOOGLE_WORKSPACE_MIMES.has(mime)) {
+  if (mime.startsWith(GOOGLE_WORKSPACE_PREFIX)) {
     return null
   }
 
@@ -160,6 +157,7 @@ export async function organizeDrive(options: OrganizeOptions): Promise<Report> {
   try {
     const client = await DriveClient.forUser(userId)
     const drive = client.getDrive()
+    const accessToken = await client.getAccessToken() ?? undefined
 
     console.log(`[organizer] Fetching file list for user: ${userId}`)
     console.log(folderId ? `[organizer] Scope: folder ${folderId}` : '[organizer] Scope: entire Drive')
@@ -193,7 +191,7 @@ export async function organizeDrive(options: OrganizeOptions): Promise<Report> {
       })
 
       // Skip native Google Workspace files
-      if (GOOGLE_WORKSPACE_MIMES.has(mime)) {
+      if (mime.startsWith(GOOGLE_WORKSPACE_PREFIX)) {
         report.skippedFiles.push({ fileId: file.id!, fileName: file.name!, reason: 'Native Google Workspace file — cannot be moved' })
         report.summary.skipped++
 
@@ -206,9 +204,9 @@ export async function organizeDrive(options: OrganizeOptions): Promise<Report> {
       try {
         let analysis
         if (mime.startsWith('image/')) {
-          analysis = await analyzeImage(file.id!, file)
+          analysis = await analyzeImage(file.id!, file, accessToken)
         } else if (mime.startsWith('video/')) {
-          analysis = await analyzeVideo(file.id!, file)
+          analysis = await analyzeVideo(file.id!, file, accessToken)
         } else {
           analysis = await analyzeDocument(file.id!, file, drive)
         }

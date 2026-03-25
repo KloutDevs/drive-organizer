@@ -5,6 +5,7 @@
   "type": "module",
   "main": "dist/organizer/index.js",
   "scripts": {
+    "setup": "node --loader ts-node/esm scripts/setup.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "oauth-server": "node --loader ts-node/esm src/oauth/server.ts",

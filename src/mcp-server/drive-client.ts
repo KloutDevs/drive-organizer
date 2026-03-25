@@ -61,9 +61,11 @@ export class DriveAuthError extends Error {
 
 export class DriveClient {
   private drive: drive_v3.Drive
+  private auth: InstanceType<typeof google.auth.OAuth2>
 
-  private constructor(drive: drive_v3.Drive) {
+  private constructor(drive: drive_v3.Drive, auth: InstanceType<typeof google.auth.OAuth2>) {
     this.drive = drive
+    this.auth = auth
   }
 
   static async forUser(userId: string): Promise<DriveClient> {
@@ -100,10 +102,19 @@ export class DriveClient {
     })
 
     const drive = google.drive({ version: 'v3', auth: oauth2Client })
-    return new DriveClient(drive)
+    return new DriveClient(drive, oauth2Client)
   }
 
   getDrive(): drive_v3.Drive {
     return this.drive
+  }
+
+  async getAccessToken(): Promise<string | null> {
+    try {
+      const { token } = await this.auth.getAccessToken()
+      return token ?? null
+    } catch {
+      return null
+    }
   }
 }

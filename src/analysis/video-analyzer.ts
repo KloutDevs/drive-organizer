@@ -3,6 +3,7 @@ import { drive_v3 } from 'googleapis'
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { fetchThumbnailAsBase64 } from './thumbnail-fetcher.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../../.env') })
@@ -62,7 +63,7 @@ function classifyVideoFromMetadataOnly(
   }
 }
 
-export async function analyzeVideo(fileId: string, metadata: DriveFile): Promise<VideoAnalysis> {
+export async function analyzeVideo(fileId: string, metadata: DriveFile, accessToken?: string): Promise<VideoAnalysis> {
   const videoMeta = metadata.videoMediaMetadata
   const durationSec = videoMeta?.durationMillis
     ? Math.round(Number(videoMeta.durationMillis) / 1000)
@@ -81,24 +82,32 @@ export async function analyzeVideo(fileId: string, metadata: DriveFile): Promise
     return classifyVideoFromMetadataOnly(metadata, durationSec)
   }
 
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 400,
-    system: `Sos un sistema experto en clasificación de videos.
+  // Drive thumbnailLinks require OAuth — fetch and convert to base64
+  const thumbnail = await fetchThumbnailAsBase64(metadata.thumbnailLink, accessToken)
+  if (!thumbnail) {
+    return classifyVideoFromMetadataOnly(metadata, durationSec)
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 400,
+      system: `Sos un sistema experto en clasificación de videos.
 Retornás ÚNICAMENTE un JSON válido, sin markdown, sin explicaciones.`,
-    messages: [{
-      role: 'user',
-      content: [
-        {
-          type: 'image',
-          source: {
-            type: 'url',
-            url: metadata.thumbnailLink,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: thumbnail.mediaType,
+              data: thumbnail.data,
+            },
           },
-        },
-        {
-          type: 'text',
-          text: `Este es el thumbnail representativo de un video. Analizalo y retorná este JSON:
+          {
+            type: 'text',
+            text: `Este es el thumbnail representativo de un video. Analizalo y retorná este JSON:
 {
   "theme": "<vacaciones|trabajo|familia|eventos|tutoriales|otro>",
   "estimatedYear": <número o null>,
@@ -110,11 +119,15 @@ Retornás ÚNICAMENTE un JSON válido, sin markdown, sin explicaciones.`,
 
 Metadata del video:
 ${context}`,
-        },
-      ],
-    }],
-  })
+          },
+        ],
+      }],
+    })
 
-  const parsed = parseJsonResponse<Omit<VideoAnalysis, 'duration'>>(response, defaultVideoAnalysis())
-  return { ...parsed, duration: durationSec ?? 0 }
+    const parsed = parseJsonResponse<Omit<VideoAnalysis, 'duration'>>(response, defaultVideoAnalysis())
+    return { ...parsed, duration: durationSec ?? 0 }
+  } catch {
+    // Thumbnail exists but Claude couldn't process it — fall back to metadata
+    return classifyVideoFromMetadataOnly(metadata, durationSec)
+  }
 }

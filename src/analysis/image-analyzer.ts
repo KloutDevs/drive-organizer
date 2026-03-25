@@ -3,6 +3,7 @@ import { drive_v3 } from 'googleapis'
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { fetchThumbnailAsBase64 } from './thumbnail-fetcher.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../../.env') })
@@ -84,7 +85,7 @@ Metadata: ${context}`,
   return parseJsonResponse<ImageAnalysis>(response, defaultImageAnalysis())
 }
 
-export async function analyzeImage(fileId: string, metadata: DriveFile): Promise<ImageAnalysis> {
+export async function analyzeImage(fileId: string, metadata: DriveFile, accessToken?: string): Promise<ImageAnalysis> {
   const driveContext = JSON.stringify({
     capturedAt: metadata.imageMediaMetadata?.time ?? null,
     location: metadata.imageMediaMetadata?.location ?? null,
@@ -100,24 +101,32 @@ export async function analyzeImage(fileId: string, metadata: DriveFile): Promise
     return analyzeFromMetadataOnly(metadata)
   }
 
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 500,
-    system: `Sos un sistema experto en clasificación de archivos visuales.
+  // Drive thumbnailLinks require OAuth — fetch and convert to base64
+  const thumbnail = await fetchThumbnailAsBase64(metadata.thumbnailLink, accessToken)
+  if (!thumbnail) {
+    return analyzeFromMetadataOnly(metadata)
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: 500,
+      system: `Sos un sistema experto en clasificación de archivos visuales.
 Retornás ÚNICAMENTE un JSON válido, sin markdown, sin explicaciones.`,
-    messages: [{
-      role: 'user',
-      content: [
-        {
-          type: 'image',
-          source: {
-            type: 'url',
-            url: metadata.thumbnailLink,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: thumbnail.mediaType,
+              data: thumbnail.data,
+            },
           },
-        },
-        {
-          type: 'text',
-          text: `Analizá esta imagen y retorná este JSON exacto:
+          {
+            type: 'text',
+            text: `Analizá esta imagen y retorná este JSON exacto:
 {
   "theme": "<vacaciones|trabajo|familia|eventos|documentos|capturas|otro>",
   "detectedPeople": <true|false>,
@@ -132,10 +141,14 @@ Retornás ÚNICAMENTE un JSON válido, sin markdown, sin explicaciones.`,
 
 Metadata del archivo (usar como contexto prioritario, especialmente la fecha):
 ${driveContext}`,
-        },
-      ],
-    }],
-  })
+          },
+        ],
+      }],
+    })
 
-  return parseJsonResponse<ImageAnalysis>(response, defaultImageAnalysis())
+    return parseJsonResponse<ImageAnalysis>(response, defaultImageAnalysis())
+  } catch {
+    // Thumbnail exists but Claude couldn't process it — fall back to metadata
+    return analyzeFromMetadataOnly(metadata)
+  }
 }

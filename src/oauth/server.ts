@@ -9,6 +9,15 @@ import * as dotenv from 'dotenv'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../../.env') })
 
+const missing = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'ENCRYPTION_KEY'].filter(
+  k => !process.env[k]
+)
+if (missing.length > 0) {
+  console.error(`\n❌ Missing required environment variables: ${missing.join(', ')}`)
+  console.error('   Run: npm run setup\n')
+  process.exit(1)
+}
+
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID!
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!
 const REDIRECT_URI = process.env.REDIRECT_URI ?? 'http://localhost:3000/oauth/callback'
