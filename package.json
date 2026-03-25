@@ -1,0 +1,40 @@
+{
+  "name": "drive-organizer",
+  "version": "1.0.0",
+  "description": "Intelligently organizes Google Drive using MCP and Claude AI analysis",
+  "type": "module",
+  "main": "dist/organizer/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "oauth-server": "node --loader ts-node/esm src/oauth/server.ts",
+    "mcp-server": "node --loader ts-node/esm src/mcp-server/index.ts",
+    "connect-drive": "node --loader ts-node/esm scripts/connect-drive.ts",
+    "organize": "node --loader ts-node/esm src/organizer/index.ts",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write src/**/*.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@modelcontextprotocol/sdk": "^1.10.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "googleapis": "^144.0.0",
+    "ioredis": "^5.3.2",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "@types/pdf-parse": "^1.1.4",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.5.0",
+    "prettier": "^3.3.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "drive-organizer": {
+      "command": "node",
+      "args": ["--loader", "ts-node/esm", "src/mcp-server/index.ts"],
+      "env": {
+        "USER_ID": "${USER_ID}",
+        "REDIS_URL": "${REDIS_URL}",
+        "GOOGLE_CLIENT_ID": "${GOOGLE_CLIENT_ID}",
+        "GOOGLE_CLIENT_SECRET": "${GOOGLE_CLIENT_SECRET}",
+        "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+        "ENCRYPTION_KEY": "${ENCRYPTION_KEY}",
+        "MAX_DISK_MB": "200"
+      }
+    }
+  }
+}
